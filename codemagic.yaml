@@ -1,47 +1,24 @@
 workflows:
-  android-debug:
-    name: Android Debug (recreate android/)
-    max_build_duration: 60
+  android-debug-fast:
+    name: Android Debug (fast & reliable)
+    max_build_duration: 40   # avoid super long hangs
     environment:
-      flutter: stable
+      flutter: 3.35.6        # pin to the version your logs showed
       java: 17
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
+        - ~/.gradle/caches
     scripts:
-      - echo "Flutter & Java versions:"
-      - flutter --version
-      - java -version
-      # IMPORTANT: remove old android folder so we get the new template
-      - rm -rf android
-      # Recreate a modern Android project (no iOS needed)
-      - flutter create . --platforms=android --org com.example
+      - echo "Versions:" && flutter --version && java -version
+      # Recreate android/ ONLY IF missing; avoids old templates but doesn’t redo every build
+      - '[ -d android ] || flutter create . --platforms=android --org com.example'
       - flutter pub get
-      # Build debug APK (more tolerant, good for first run)
-      - flutter build apk --debug -v
-    artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
-
-  android-release:
-    name: Android Release (recreate android/)
-    max_build_duration: 60
-    environment:
-      flutter: stable
-      java: 17
-    cache:
-      cache_paths:
-        - $FLUTTER_ROOT/.pub-cache
-    scripts:
-      - echo "Flutter & Java versions:"
-      - flutter --version
-      - java -version
-      # Recreate android/ to avoid old Gradle/AGP configs
-      - rm -rf android
-      - flutter create . --platforms=android --org com.example
-      - flutter pub get
-      # Accept SDK licenses (best-effort)
+      # Accept SDK licenses (non-interactive)
       - yes | sdkmanager --licenses || true
-      # Build release with verbose logs and no shrink (avoids R8 issues)
-      - flutter build apk --release -v --no-shrink
+      # Build with Gradle directly (more robust in CI)
+      - cd android
+      - ./gradlew clean
+      - ./gradlew assembleDebug -x lint --no-daemon --stacktrace --warning-mode all --console=plain
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - android/app/build/outputs/apk/debug/app-debug.apk
