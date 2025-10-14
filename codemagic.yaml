@@ -1,0 +1,21 @@
+workflows:
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    environment:
+      flutter: stable
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+    scripts:
+      - echo "Flutter version:"
+      - flutter --version
+      # Get packages
+      - flutter pub get
+      # If android/ios folders are missing, create them
+      - flutter create . || true
+      - flutter pub get
+      # Build APK
+      - flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
