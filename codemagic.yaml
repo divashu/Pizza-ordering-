@@ -1,9 +1,9 @@
 workflows:
   android-debug-fast:
     name: Android Debug (fast & reliable)
-    max_build_duration: 40   # avoid super long hangs
+    max_build_duration: 40
     environment:
-      flutter: 3.35.6        # pin to the version your logs showed
+      flutter: 3.35.6
       java: 17
     cache:
       cache_paths:
@@ -11,14 +11,40 @@ workflows:
         - ~/.gradle/caches
     scripts:
       - echo "Versions:" && flutter --version && java -version
-      # Recreate android/ ONLY IF missing; avoids old templates but doesn’t redo every build
+      # Create android/ if missing (don’t delete on every build)
       - '[ -d android ] || flutter create . --platforms=android --org com.example'
       - flutter pub get
-      # Accept SDK licenses (non-interactive)
       - yes | sdkmanager --licenses || true
-      # Build with Gradle directly (more robust in CI)
-      - cd android
-      - ./gradlew clean
-      - ./gradlew assembleDebug -x lint --no-daemon --stacktrace --warning-mode all --console=plain
+      # <<< run all gradle commands in ONE step >>>
+      - |
+        set -e
+        cd android
+        chmod +x gradlew
+        ./gradlew clean
+        ./gradlew assembleDebug -x lint --no-daemon --stacktrace --warning-mode all --console=plain
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
+
+  android-release-fast:
+    name: Android Release (fast)
+    max_build_duration: 40
+    environment:
+      flutter: 3.35.6
+      java: 17
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+        - ~/.gradle/caches
+    scripts:
+      - echo "Versions:" && flutter --version && java -version
+      - '[ -d android ] || flutter create . --platforms=android --org com.example'
+      - flutter pub get
+      - yes | sdkmanager --licenses || true
+      - |
+        set -e
+        cd android
+        chmod +x gradlew
+        ./gradlew clean
+        ./gradlew assembleRelease -x lint --no-daemon --stacktrace --warning-mode all --console=plain
+    artifacts:
+      - android/app/build/outputs/apk/release/app-release.apk
