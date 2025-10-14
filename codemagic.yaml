@@ -1,6 +1,6 @@
 workflows:
   android-debug-patched:
-    name: Android Debug (settings.gradle patched)
+    name: Android Debug (fully patched)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -9,13 +9,28 @@ workflows:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
+
     scripts:
       - echo "Versions:" && flutter --version && java -version
+
+      # Create (or refresh) the android folder so we have a standard layout
       - flutter create . --platforms=android --org com.example --overwrite
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # >>> Patch settings.gradle to use the new plugin DSL
+      # --- Patch Gradle wrapper to a version compatible with AGP 8.7.x ---
+      - |
+        set -e
+        cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.10.2-all.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        echo "Patched gradle-wrapper.properties to Gradle 8.10.2"
+
+      # --- Patch settings.gradle to use the new plugin DSL & pin AGP/Kotlin ---
       - |
         set -e
         cat > android/settings.gradle <<'EOF'
@@ -30,23 +45,39 @@ workflows:
           if (flutterSdkPath == null) {
             throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
           }
+
           includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
           repositories {
             google()
             mavenCentral()
             gradlePluginPortal()
           }
         }
+
         plugins {
-          // New way: load Flutter’s Gradle plugins declaratively
+          // 👇 Pin modern AGP + Kotlin explicitly
+          id "com.android.application" version "8.7.2" apply false
+          id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+
+          // Required by Flutter, declared declaratively (no 'apply from:')
           id "dev.flutter.flutter-plugin-loader"
         }
+
         include(":app")
         EOF
         echo "Patched android/settings.gradle:"
-        sed -n '1,120p' android/settings.gradle
+        sed -n '1,160p' android/settings.gradle
 
-      # Build via Flutter (publishes artifact reliably)
+      # --- Make sure the app/build.gradle uses the plugins block (Flutter's default does) ---
+      # If you ever customized it, keep just this at the top:
+      # plugins {
+      #   id "com.android.application"
+      #   id "org.jetbrains.kotlin.android"
+      #   id "dev.flutter.flutter-gradle-plugin"
+      # }
+
+      # Build debug APK
       - flutter build apk --debug -v --no-shrink
 
     artifacts:
