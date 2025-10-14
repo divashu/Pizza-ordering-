@@ -1,6 +1,6 @@
 workflows:
-  android-debug-fixed:
-    name: Android Debug (APK output fixed)
+  android-debug-patched:
+    name: Android Debug (settings.gradle patched)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -14,10 +14,40 @@ workflows:
       - flutter create . --platforms=android --org com.example --overwrite
       - flutter pub get
       - yes | sdkmanager --licenses || true
+
+      # >>> Patch settings.gradle to use the new plugin DSL
       - |
         set -e
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug -x lint --no-daemon --stacktrace --warning-mode all --console=plain
+        cat > android/settings.gradle <<'EOF'
+        pluginManagement {
+          // Resolve Flutter SDK path
+          def flutterSdkPath = System.getenv("FLUTTER_ROOT")
+          if (flutterSdkPath == null && file("local.properties").exists()) {
+            def props = new Properties()
+            file("local.properties").withInputStream { props.load(it) }
+            flutterSdkPath = props.getProperty("flutter.sdk")
+          }
+          if (flutterSdkPath == null) {
+            throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
+          }
+          includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+          repositories {
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+          }
+        }
+        plugins {
+          // New way: load Flutter’s Gradle plugins declaratively
+          id "dev.flutter.flutter-plugin-loader"
+        }
+        include(":app")
+        EOF
+        echo "Patched android/settings.gradle:"
+        sed -n '1,120p' android/settings.gradle
+
+      # Build via Flutter (publishes artifact reliably)
+      - flutter build apk --debug -v --no-shrink
+
     artifacts:
-      - android/app/build/outputs/apk/debug/app-debug.apk
+      - build/app/outputs/flutter-apk/app-debug.apk
