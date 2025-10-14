@@ -1,6 +1,6 @@
 workflows:
-  android-debug-fix:
-    name: Android Debug (force recreate android/)
+  android-debug-fixed:
+    name: Android Debug (APK output fixed)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -11,26 +11,13 @@ workflows:
         - ~/.gradle/caches
     scripts:
       - echo "Versions:" && flutter --version && java -version
-      # Always recreate android/ to avoid stale/failed state
-      - rm -rf android
-      - flutter create . --platforms=android --org com.example
-      # Sanity check: ensure gradlew exists, print tree if not
-      - |
-        set -e
-        if [ ! -f android/gradlew ]; then
-          echo "❌ android/gradlew not found. Dumping repo tree:"
-          ls -la
-          echo "Dumping android/ tree (if any):"
-          ls -la android || true
-          exit 1
-        fi
+      - flutter create . --platforms=android --org com.example --overwrite
       - flutter pub get
       - yes | sdkmanager --licenses || true
       - |
         set -e
         cd android
         chmod +x gradlew
-        ./gradlew clean
         ./gradlew assembleDebug -x lint --no-daemon --stacktrace --warning-mode all --console=plain
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
