@@ -1,5 +1,4 @@
 plugins {
   id "com.android.application" version "8.6.1" apply false
-  // no kotlin here
   id "dev.flutter.flutter-plugin-loader" apply false
 }
