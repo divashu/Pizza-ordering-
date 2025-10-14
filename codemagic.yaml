@@ -1,6 +1,6 @@
 workflows:
-  android-debug-patched:
-    name: Android Debug (fully patched)
+  android-debug-java:
+    name: Android Debug (no Kotlin, new Gradle DSL)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -9,27 +9,17 @@ workflows:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
-
     scripts:
       - echo "Versions:" && flutter --version && java -version
-      - flutter create . --platforms=android --org com.example --overwrite
+
+      # Regenerate Android host in **JAVA** (no Kotlin plugin needed)
+      - flutter create . --platforms=android -a java --org com.example --overwrite
+
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # Pin Gradle wrapper (matches AGP 8.6.1)
+      # settings.gradle (loads Flutter's Gradle plugin via includeBuild + plugins DSL)
       - |
-        mkdir -p android/gradle/wrapper
-        cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
-        EOF
-
-      # settings.gradle -> plugin DSL + include Flutter tools
-      - |
-        set -e
         cat > android/settings.gradle <<'EOF'
         pluginManagement {
           def flutterSdkPath = System.getenv("FLUTTER_ROOT")
@@ -42,7 +32,11 @@ workflows:
             throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
           }
           includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-          repositories { google(); mavenCentral(); gradlePluginPortal() }
+          repositories {
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+          }
         }
         plugins {
           id "dev.flutter.flutter-plugin-loader"
@@ -50,56 +44,55 @@ workflows:
         include(":app")
         EOF
 
-      # ROOT android/build.gradle — DO NOT declare Kotlin here
+      # Root android/build.gradle – AGP only (no Kotlin here)
       - |
         cat > android/build.gradle <<'EOF'
         plugins {
           id "com.android.application" version "8.6.1" apply false
-          // Kotlin is already on the classpath via Flutter; don't redeclare it here.
           id "dev.flutter.flutter-plugin-loader" apply false
         }
         EOF
 
-      # app/build.gradle (module)
+      # Module android/app/build.gradle – NO Kotlin plugin, NO kotlinOptions
       - |
         cat > android/app/build.gradle <<'EOF'
         plugins {
-          id "com.android.application"
-          id "org.jetbrains.kotlin.android"
-          id "dev.flutter.flutter-gradle-plugin"
+            id "com.android.application"
+            id "dev.flutter.flutter-gradle-plugin"
         }
 
         android {
-          namespace "com.example.pizza_ordering"
-          compileSdk 34
+            namespace "com.example.pizza_ordering"
+            compileSdk 34
 
-          defaultConfig {
-            applicationId "com.example.pizza_ordering"
-            minSdk 21
-            targetSdk 34
-            versionCode 1
-            versionName "1.0"
-            multiDexEnabled true
-          }
-
-          buildTypes {
-            release {
-              minifyEnabled false
-              signingConfig signingConfigs.debug
+            defaultConfig {
+                applicationId "com.example.pizza_ordering"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+                multiDexEnabled true
             }
-          }
 
-          compileOptions {
-            sourceCompatibility JavaVersion.VERSION_17
-            targetCompatibility JavaVersion.VERSION_17
-          }
-          kotlinOptions { jvmTarget = "17" }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    signingConfig signingConfigs.debug
+                }
+            }
+
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
         }
 
-        flutter { source '../..' }
+        flutter {
+            source '../..'
+        }
         EOF
 
-      # Build the APK
+      # Build
       - flutter build apk --debug --no-shrink -v
 
     artifacts:
