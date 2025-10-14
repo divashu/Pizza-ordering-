@@ -1,21 +1,44 @@
 workflows:
-  android-release:
-    name: Android Release
+  android-debug:
+    name: Android Debug (safe first build)
     max_build_duration: 60
     environment:
       flutter: stable
+      java: 17
     cache:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
     scripts:
-      - echo "Flutter version:"
+      - echo "Flutter & Java versions:"
       - flutter --version
-      # Get packages
+      - java -version
+      # If android/ folder is missing, create it (no iOS needed)
+      - flutter create . --platforms=android || true
       - flutter pub get
-      # If android/ios folders are missing, create them
-      - flutter create . || true
+      # Make the build more tolerant & verbose for first run
+      - flutter build apk --debug -v
+    artifacts:
+      - build/app/outputs/flutter-apk/app-debug.apk
+
+  android-release:
+    name: Android Release (optimized)
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      java: 17
+    cache:
+      cache_paths:
+        - $FLUTTER_ROOT/.pub-cache
+    scripts:
+      - echo "Flutter & Java versions:"
+      - flutter --version
+      - java -version
+      # Ensure android project exists
+      - flutter create . --platforms=android || true
       - flutter pub get
-      # Build APK
-      - flutter build apk --release
+      # (Optional) Accept Android SDK licenses just in case
+      - yes | sdkmanager --licenses || true
+      # Build release with verbose logs and no shrink (avoids R8 issues)
+      - flutter build apk --release -v --no-shrink
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
