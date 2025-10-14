@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Android Debug (safe first build)
+    name: Android Debug (recreate android/)
     max_build_duration: 60
     environment:
       flutter: stable
@@ -12,16 +12,18 @@ workflows:
       - echo "Flutter & Java versions:"
       - flutter --version
       - java -version
-      # If android/ folder is missing, create it (no iOS needed)
-      - flutter create . --platforms=android || true
+      # IMPORTANT: remove old android folder so we get the new template
+      - rm -rf android
+      # Recreate a modern Android project (no iOS needed)
+      - flutter create . --platforms=android --org com.example
       - flutter pub get
-      # Make the build more tolerant & verbose for first run
+      # Build debug APK (more tolerant, good for first run)
       - flutter build apk --debug -v
     artifacts:
       - build/app/outputs/flutter-apk/app-debug.apk
 
   android-release:
-    name: Android Release (optimized)
+    name: Android Release (recreate android/)
     max_build_duration: 60
     environment:
       flutter: stable
@@ -33,10 +35,11 @@ workflows:
       - echo "Flutter & Java versions:"
       - flutter --version
       - java -version
-      # Ensure android project exists
-      - flutter create . --platforms=android || true
+      # Recreate android/ to avoid old Gradle/AGP configs
+      - rm -rf android
+      - flutter create . --platforms=android --org com.example
       - flutter pub get
-      # (Optional) Accept Android SDK licenses just in case
+      # Accept SDK licenses (best-effort)
       - yes | sdkmanager --licenses || true
       # Build release with verbose logs and no shrink (avoids R8 issues)
       - flutter build apk --release -v --no-shrink
