@@ -16,7 +16,7 @@ workflows:
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # --- Pin Gradle wrapper to known good version (8.7) ---
+      # Pin Gradle wrapper (matches AGP 8.6.1)
       - |
         mkdir -p android/gradle/wrapper
         cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
@@ -27,7 +27,7 @@ workflows:
         zipStorePath=wrapper/dists
         EOF
 
-      # --- Patch settings.gradle to the new plugin DSL ---
+      # settings.gradle -> plugin DSL + include Flutter tools
       - |
         set -e
         cat > android/settings.gradle <<'EOF'
@@ -50,57 +50,56 @@ workflows:
         include(":app")
         EOF
 
-      # --- Patch ROOT android/build.gradle to modern DSL ---
+      # ROOT android/build.gradle — DO NOT declare Kotlin here
       - |
         cat > android/build.gradle <<'EOF'
         plugins {
-            id "com.android.application" version "8.6.1" apply false
-            id "org.jetbrains.kotlin.android" version "1.9.24" apply false
-            id "dev.flutter.flutter-plugin-loader" apply false
+          id "com.android.application" version "8.6.1" apply false
+          // Kotlin is already on the classpath via Flutter; don't redeclare it here.
+          id "dev.flutter.flutter-plugin-loader" apply false
         }
         EOF
 
-      # --- Patch app/build.gradle (module) ---
+      # app/build.gradle (module)
       - |
         cat > android/app/build.gradle <<'EOF'
         plugins {
-            id "com.android.application"
-            id "org.jetbrains.kotlin.android"
-            id "dev.flutter.flutter-gradle-plugin"
+          id "com.android.application"
+          id "org.jetbrains.kotlin.android"
+          id "dev.flutter.flutter-gradle-plugin"
         }
 
         android {
-            namespace "com.example.pizza_ordering"
-            compileSdk 34
+          namespace "com.example.pizza_ordering"
+          compileSdk 34
 
-            defaultConfig {
-                applicationId "com.example.pizza_ordering"
-                minSdk 21
-                targetSdk 34
-                versionCode 1
-                versionName "1.0"
-                multiDexEnabled true
+          defaultConfig {
+            applicationId "com.example.pizza_ordering"
+            minSdk 21
+            targetSdk 34
+            versionCode 1
+            versionName "1.0"
+            multiDexEnabled true
+          }
+
+          buildTypes {
+            release {
+              minifyEnabled false
+              signingConfig signingConfigs.debug
             }
+          }
 
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    signingConfig signingConfigs.debug
-                }
-            }
-
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_17
-                targetCompatibility JavaVersion.VERSION_17
-            }
-
-            kotlinOptions { jvmTarget = "17" }
+          compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+          }
+          kotlinOptions { jvmTarget = "17" }
         }
 
         flutter { source '../..' }
         EOF
 
-      # --- Build APK ---
+      # Build the APK
       - flutter build apk --debug --no-shrink -v
 
     artifacts:
