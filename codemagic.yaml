@@ -18,30 +18,21 @@ workflows:
       - name: Pub get
         script: flutter pub get
 
-      - name: Ensure Android host + Gradle wrapper + flutter_settings.gradle
+      - name: Ensure Android host + Gradle wrapper
         script: |
-          # Create missing Android glue (gradlew, flutter_settings.gradle) safely
           flutter create . --platforms=android
           chmod +x android/gradlew || true
 
       - name: Ensure local.properties has Flutter & Android SDK paths
         script: |
-          # Write absolute paths (env vars expand because EOF is unquoted)
+          [ -z "$ANDROID_SDK_ROOT" ] && { echo "ANDROID_SDK_ROOT is empty"; exit 1; }
+          [ -z "$FLUTTER_ROOT" ] && { echo "FLUTTER_ROOT is empty"; exit 1; }
           cat > android/local.properties <<EOF
-          sdk.dir=$ANDROID_SDK_ROOT
-          flutter.sdk=$FLUTTER_ROOT
-          EOF
+sdk.dir=$ANDROID_SDK_ROOT
+flutter.sdk=$FLUTTER_ROOT
+EOF
           echo "---- android/local.properties ----"
           cat android/local.properties
-
-      - name: Show Android dir (debug)
-        script: |
-          echo "---- android (top-level) ----"
-          ls -la android | sed -n '1,200p'
-          echo "---- android/gradle/wrapper ----"
-          ls -la android/gradle/wrapper || true
-          echo "---- flutter_settings.gradle (head) ----"
-          sed -n '1,120p' android/flutter_settings.gradle || true
 
       - name: Build with Gradle
         script: |
