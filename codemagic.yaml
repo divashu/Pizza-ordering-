@@ -1,6 +1,6 @@
 workflows:
   android-debug-java:
-    name: Android Debug (no Kotlin, new Gradle DSL)
+    name: Android Debug (force KGP 1.9.24)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -9,20 +9,38 @@ workflows:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
+
     scripts:
       - echo "Versions:" && flutter --version && java -version
 
-      # 1) Regenerate Android host in **JAVA** (Kotlin-free)
+      # Regenerate the Android host in **JAVA** (no kotlin sources)
       - flutter create . --platforms=android -a java --org com.example --overwrite
-
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # 2) settings.gradle — plugin DSL + dependency resolution
+      # ---- Gradle wrapper (AGP 8.6 needs Gradle 8.9+) ----
+      - |
+        mkdir -p android/gradle/wrapper
+        cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.10.2-all.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+
+      # ---- gradle.properties (common flags) ----
+      - |
+        cat > android/gradle.properties <<'EOF'
+        org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+        android.useAndroidX=true
+        android.enableJetifier=true
+        EOF
+
+      # ---- settings.gradle: load Flutter plugin + force Kotlin plugin version ----
       - |
         cat > android/settings.gradle <<'EOF'
         pluginManagement {
-          // Resolve Flutter SDK path
           def flutterSdkPath = System.getenv("FLUTTER_ROOT")
           if (flutterSdkPath == null && file("local.properties").exists()) {
             def props = new Properties()
@@ -32,86 +50,51 @@ workflows:
           if (flutterSdkPath == null) {
             throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
           }
-
           includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
-          repositories {
-            google()
-            mavenCentral()
-            gradlePluginPortal()
+          // Force Kotlin Gradle Plugin for ALL modules/plugins that request it
+          resolutionStrategy {
+            eachPlugin {
+              if (requested.id.id.startsWith("org.jetbrains.kotlin")) {
+                useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
+              }
+            }
           }
-        }
 
-        // Let all modules resolve artifacts here
-        dependencyResolutionManagement {
-          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-          repositories {
-            google()
-            mavenCentral()
-          }
+          repositories { google(); mavenCentral(); gradlePluginPortal() }
         }
 
         plugins {
           id "dev.flutter.flutter-plugin-loader"
         }
 
+        // Ensure repos for all included builds
+        dependencyResolutionManagement {
+          repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+          repositories { google(); mavenCentral() }
+        }
+
         include(":app")
         EOF
 
-      # 3) Root android/build.gradle — AGP only (no Kotlin)
+      # ---- Root build.gradle: AGP only + put Kotlin 1.9.24 on classpath (belt & suspenders) ----
       - |
         cat > android/build.gradle <<'EOF'
         plugins {
           id "com.android.application" version "8.6.1" apply false
           id "dev.flutter.flutter-plugin-loader" apply false
         }
+
+        // Also place KGP 1.9.24 on the build classpath so any plugin that
+        // relies on "already on classpath" picks the modern version.
+        buildscript {
+          repositories { google(); mavenCentral() }
+          dependencies { classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24" }
+        }
         EOF
 
-      # 4) Module android/app/build.gradle — NO Kotlin plugin
+      # ---- Module build.gradle (no kotlin plugin here) ----
       - |
         cat > android/app/build.gradle <<'EOF'
         plugins {
-          id "com.android.application"
-          id "dev.flutter.flutter-gradle-plugin"
-        }
-
-        android {
-          namespace "com.example.pizza_ordering"
-          compileSdk 34
-
-          defaultConfig {
-            applicationId "com.example.pizza_ordering"
-            minSdk 21
-            targetSdk 34
-            versionCode 1
-            versionName "1.0"
-            multiDexEnabled true
-          }
-
-          buildTypes {
-            release {
-              minifyEnabled false
-              signingConfig signingConfigs.debug
-            }
-          }
-
-          compileOptions {
-            sourceCompatibility JavaVersion.VERSION_17
-            targetCompatibility JavaVersion.VERSION_17
-          }
-        }
-
-        flutter {
-          source '../..'
-        }
-        EOF
-
-      # 5) Quick sanity check: show headers to confirm NO Kotlin plugin anywhere
-      - echo "----- android/build.gradle -----" && sed -n '1,30p' android/build.gradle
-      - echo "----- android/app/build.gradle -----" && sed -n '1,30p' android/app/build.gradle
-
-      # 6) Build with Gradle (clearer errors than 'flutter build')
-      - cd android && ./gradlew :app:assembleDebug --no-daemon --stacktrace --warning-mode all
-
-    artifacts:
-      - android/app/build/outputs/apk/debug/app-debug.apk
+          id
