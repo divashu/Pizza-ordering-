@@ -24,7 +24,7 @@ workflows:
           chmod +x android/gradlew || true
 
       - name: Ensure local.properties has Flutter & Android SDK paths
-  script: |
+          script: |
     # Fail if env vars are missing (POSIX-safe)
     : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is empty}"
     : "${FLUTTER_ROOT:?FLUTTER_ROOT is empty}"
