@@ -11,13 +11,17 @@ workflows:
         - ~/.gradle/caches
         - android/.gradle
     scripts:
-      - echo "Versions:" && flutter --version && java -version && uname -m
-      - flutter pub get
-      - yes | sdkmanager --licenses || true
-      - cd android
-      - ./gradlew --no-daemon clean
-      - ./gradlew --no-daemon assembleDebug --stacktrace --info
-    publishing:
-      artifacts:
-        - android/app/build/outputs/**/*.apk
-        - android/app/build/reports/**/*
+      - name: Print versions
+        script: echo "Versions:" && flutter --version && java -version && uname -m
+      - name: Pub get
+        script: flutter pub get
+      - name: Accept Android licenses
+        script: yes | sdkmanager --licenses || true
+      - name: Build with Gradle
+        script: |
+          cd android
+          ./gradlew --no-daemon clean
+          ./gradlew --no-daemon assembleDebug --stacktrace --info
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/reports/**/*
