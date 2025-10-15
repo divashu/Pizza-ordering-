@@ -1,4 +1,4 @@
-// android/settings.gradle — modern Flutter setup (no flutter_settings.gradle)
+// android/settings.gradle — modern Flutter setup
 pluginManagement {
     // Find Flutter SDK path from env or local.properties
     def flutterSdkPath = System.getenv("FLUTTER_ROOT")
@@ -19,17 +19,17 @@ pluginManagement {
     }
 }
 
+// ⬇️ This MUST be before any other statements except pluginManagement
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
     }
-}
-
-plugins {
-    // This replaces the old `evaluate('flutter_settings.gradle')` loader
-    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
 }
 
 rootProject.name = "pizza-ordering"
