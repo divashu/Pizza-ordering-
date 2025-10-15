@@ -10,6 +10,7 @@ workflows:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
         - android/.gradle
+
     scripts:
       - name: Print versions
         script: echo "Versions:" && flutter --version && java -version && uname -m
@@ -17,18 +18,24 @@ workflows:
       - name: Pub get
         script: flutter pub get
 
-      - name: Accept Android licenses
-        script: yes | sdkmanager --licenses || true
-
-      - name: Ensure Android host & Gradle wrapper (no overwrite)
+      - name: Ensure Android host + Gradle wrapper + flutter_settings.gradle
         script: |
-          # If android/ or the wrapper is missing (because it's not in git),
-          # create/repair them WITHOUT --overwrite (won't touch your code).
-          if [ ! -f android/gradlew ]; then
-            echo "Gradle wrapper missing → running 'flutter create . --platforms=android'"
-            flutter create . --platforms=android
-          fi
+          # Always run 'flutter create' WITHOUT --overwrite.
+          # It will create missing Android glue (flutter_settings.gradle, gradlew, etc.)
+          # and will NOT clobber your existing files.
+          flutter create . --platforms=android
+
+          # Make sure the Gradle wrapper is executable
           chmod +x android/gradlew || true
+
+      - name: Ensure local.properties has Flutter & Android SDK paths
+        script: |
+          cat > android/local.properties <<'EOF'
+          sdk.dir=${ANDROID_SDK_ROOT}
+          flutter.sdk=${FLUTTER_ROOT}
+          EOF
+          echo "Wrote android/local.properties:"
+          cat android/local.properties
 
       - name: Build with Gradle
         script: |
