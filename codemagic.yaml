@@ -20,32 +20,27 @@ workflows:
 
       - name: Ensure Android host + Gradle wrapper + flutter_settings.gradle
         script: |
-          # Create any missing Android glue (gradlew, flutter_settings.gradle, etc.)
-          # Safe: no --overwrite, so it won't clobber your files.
+          # Create missing Android glue (gradlew, flutter_settings.gradle) safely
           flutter create . --platforms=android
-
-          # Make sure the Gradle wrapper is executable
           chmod +x android/gradlew || true
 
-        - name: Ensure local.properties has Flutter & Android SDK paths
-      script: |
-      # Write absolute paths, not literals. No quotes after EOF so env vars expand.
-      cat > android/local.properties <<EOF
-      sdk.dir=$ANDROID_SDK_ROOT
-      flutter.sdk=$FLUTTER_ROOT
-      EOF
-
-      echo "---- android/local.properties ----"
-      cat android/local.properties
-
+      - name: Ensure local.properties has Flutter & Android SDK paths
+        script: |
+          # Write absolute paths (env vars expand because EOF is unquoted)
+          cat > android/local.properties <<EOF
+          sdk.dir=$ANDROID_SDK_ROOT
+          flutter.sdk=$FLUTTER_ROOT
+          EOF
+          echo "---- android/local.properties ----"
+          cat android/local.properties
 
       - name: Show Android dir (debug)
         script: |
-          echo "---- tree android (top-level) ----"
+          echo "---- android (top-level) ----"
           ls -la android | sed -n '1,200p'
-          echo "---- tree android/gradle/wrapper ----"
+          echo "---- android/gradle/wrapper ----"
           ls -la android/gradle/wrapper || true
-          echo "---- show flutter_settings.gradle head ----"
+          echo "---- flutter_settings.gradle (head) ----"
           sed -n '1,120p' android/flutter_settings.gradle || true
 
       - name: Build with Gradle
