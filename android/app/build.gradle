@@ -1,34 +1,30 @@
 plugins {
-    id "com.android.application"
-    id "dev.flutter.flutter-gradle-plugin"
+    id 'com.android.application'
+    // id 'org.jetbrains.kotlin.android' // if you use Kotlin in the app module
+    // id 'com.google.gms.google-services' // if you use Firebase
 }
 
 android {
-    namespace "com.example.pizza_ordering"
+    namespace "com.example.pizza_ordering"        // set to your real package
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.pizza_ordering"
+        applicationId "com.example.pizza_ordering" // match your package
         minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
-        multiDexEnabled true
+        // multiDexEnabled true // only if you hit 65k methods
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
-flutter {
-    source '../..'
+dependencies {
+    // implementation 'androidx.multidex:multidex:2.0.1' // only if you enabled multidex
 }
