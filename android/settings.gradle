@@ -1,25 +1,22 @@
 pluginManagement {
-  def flutterSdkPath = System.getenv("FLUTTER_ROOT")
-  if (flutterSdkPath == null && file("local.properties").exists()) {
-    def props = new Properties()
-    file("local.properties").withInputStream { props.load(it) }
-    flutterSdkPath = props.getProperty("flutter.sdk")
-  }
-  if (flutterSdkPath == null) {
-    throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
-  }
-
-  includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-  repositories {
-    google()
-    mavenCentral()
-    gradlePluginPortal()
-  }
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
-
-plugins {
-  id "dev.flutter.flutter-plugin-loader"
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // If you use jitpack or other repos, add here.
+        // maven { url 'https://jitpack.io' }
+    }
 }
-
+rootProject.name = "pizza-ordering"
 include(":app")
+
+// Flutter’s local build (keep these two lines if your template has them)
+setBinding(new Binding([gradle: this]))
+evaluate(new File(settingsDir, "flutter_settings.gradle"))
