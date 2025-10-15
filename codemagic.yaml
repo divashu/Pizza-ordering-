@@ -20,9 +20,8 @@ workflows:
 
       - name: Ensure Android host + Gradle wrapper + flutter_settings.gradle
         script: |
-          # Always run 'flutter create' WITHOUT --overwrite.
-          # It will create missing Android glue (flutter_settings.gradle, gradlew, etc.)
-          # and will NOT clobber your existing files.
+          # Create any missing Android glue (gradlew, flutter_settings.gradle, etc.)
+          # Safe: no --overwrite, so it won't clobber your files.
           flutter create . --platforms=android
 
           # Make sure the Gradle wrapper is executable
@@ -34,8 +33,17 @@ workflows:
           sdk.dir=${ANDROID_SDK_ROOT}
           flutter.sdk=${FLUTTER_ROOT}
           EOF
-          echo "Wrote android/local.properties:"
+          echo "---- android/local.properties ----"
           cat android/local.properties
+
+      - name: Show Android dir (debug)
+        script: |
+          echo "---- tree android (top-level) ----"
+          ls -la android | sed -n '1,200p'
+          echo "---- tree android/gradle/wrapper ----"
+          ls -la android/gradle/wrapper || true
+          echo "---- show flutter_settings.gradle head ----"
+          sed -n '1,120p' android/flutter_settings.gradle || true
 
       - name: Build with Gradle
         script: |
