@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Android Debug (modern Gradle)
+    name: Android Debug (modern Gradle, CI wrapper)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -13,15 +13,29 @@ workflows:
     scripts:
       - name: Print versions
         script: echo "Versions:" && flutter --version && java -version && uname -m
+
       - name: Pub get
         script: flutter pub get
+
       - name: Accept Android licenses
         script: yes | sdkmanager --licenses || true
+
+      - name: Ensure Android host & Gradle wrapper (no overwrite)
+        script: |
+          # If android/ or the wrapper is missing (because it's not in git),
+          # create/repair them WITHOUT --overwrite (won't touch your code).
+          if [ ! -f android/gradlew ]; then
+            echo "Gradle wrapper missing → running 'flutter create . --platforms=android'"
+            flutter create . --platforms=android
+          fi
+          chmod +x android/gradlew || true
+
       - name: Build with Gradle
         script: |
           cd android
           ./gradlew --no-daemon clean
           ./gradlew --no-daemon assembleDebug --stacktrace --info
+
     artifacts:
       - android/app/build/outputs/**/*.apk
       - android/app/build/reports/**/*
