@@ -12,16 +12,17 @@ workflows:
     scripts:
       - echo "Versions:" && flutter --version && java -version
 
-      # Regenerate Android host in **JAVA** (no Kotlin plugin needed)
+      # 1) Regenerate Android host in **JAVA** (Kotlin-free)
       - flutter create . --platforms=android -a java --org com.example --overwrite
 
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # settings.gradle (loads Flutter's Gradle plugin via includeBuild + plugins DSL)
+      # 2) settings.gradle — plugin DSL + dependency resolution
       - |
         cat > android/settings.gradle <<'EOF'
         pluginManagement {
+          // Resolve Flutter SDK path
           def flutterSdkPath = System.getenv("FLUTTER_ROOT")
           if (flutterSdkPath == null && file("local.properties").exists()) {
             def props = new Properties()
@@ -31,20 +32,33 @@ workflows:
           if (flutterSdkPath == null) {
             throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
           }
+
           includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
           repositories {
             google()
             mavenCentral()
             gradlePluginPortal()
           }
         }
+
+        // Let all modules resolve artifacts here
+        dependencyResolutionManagement {
+          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+          repositories {
+            google()
+            mavenCentral()
+          }
+        }
+
         plugins {
           id "dev.flutter.flutter-plugin-loader"
         }
+
         include(":app")
         EOF
 
-      # Root android/build.gradle – AGP only (no Kotlin here)
+      # 3) Root android/build.gradle — AGP only (no Kotlin)
       - |
         cat > android/build.gradle <<'EOF'
         plugins {
@@ -53,47 +67,51 @@ workflows:
         }
         EOF
 
-      # Module android/app/build.gradle – NO Kotlin plugin, NO kotlinOptions
+      # 4) Module android/app/build.gradle — NO Kotlin plugin
       - |
         cat > android/app/build.gradle <<'EOF'
         plugins {
-            id "com.android.application"
-            id "dev.flutter.flutter-gradle-plugin"
+          id "com.android.application"
+          id "dev.flutter.flutter-gradle-plugin"
         }
 
         android {
-            namespace "com.example.pizza_ordering"
-            compileSdk 34
+          namespace "com.example.pizza_ordering"
+          compileSdk 34
 
-            defaultConfig {
-                applicationId "com.example.pizza_ordering"
-                minSdk 21
-                targetSdk 34
-                versionCode 1
-                versionName "1.0"
-                multiDexEnabled true
-            }
+          defaultConfig {
+            applicationId "com.example.pizza_ordering"
+            minSdk 21
+            targetSdk 34
+            versionCode 1
+            versionName "1.0"
+            multiDexEnabled true
+          }
 
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    signingConfig signingConfigs.debug
-                }
+          buildTypes {
+            release {
+              minifyEnabled false
+              signingConfig signingConfigs.debug
             }
+          }
 
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_17
-                targetCompatibility JavaVersion.VERSION_17
-            }
+          compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+          }
         }
 
         flutter {
-            source '../..'
+          source '../..'
         }
         EOF
 
-      # Build
-      - flutter build apk --debug --no-shrink -v
+      # 5) Quick sanity check: show headers to confirm NO Kotlin plugin anywhere
+      - echo "----- android/build.gradle -----" && sed -n '1,30p' android/build.gradle
+      - echo "----- android/app/build.gradle -----" && sed -n '1,30p' android/app/build.gradle
+
+      # 6) Build with Gradle (clearer errors than 'flutter build')
+      - cd android && ./gradlew :app:assembleDebug --no-daemon --stacktrace --warning-mode all
 
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
+      - android/app/build/outputs/apk/debug/app-debug.apk
