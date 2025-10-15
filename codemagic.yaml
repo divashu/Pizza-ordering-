@@ -1,6 +1,6 @@
 workflows:
-  android-debug-java:
-    name: Android Debug (force KGP 1.9.24)
+  android-debug:
+    name: Android Debug (modern Gradle)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -9,111 +9,15 @@ workflows:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
-
+        - android/.gradle
     scripts:
-      - echo "Versions:" && flutter --version && java -version
-
-      # Regenerate the Android host in JAVA (no Kotlin sources)
-      - flutter create . --platforms=android -a java --org com.example --overwrite
+      - echo "Versions:" && flutter --version && java -version && uname -m
       - flutter pub get
       - yes | sdkmanager --licenses || true
-
-      # ---- Gradle wrapper (AGP 8.6 needs Gradle 8.9+) ----
-      - |
-        mkdir -p android/gradle/wrapper
-        cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.10.2-all.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
-        EOF
-
-      # ---- gradle.properties (common flags) ----
-      - |
-        cat > android/gradle.properties <<'EOF'
-        org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
-        android.useAndroidX=true
-        android.enableJetifier=true
-        EOF
-
-      # ---- settings.gradle: load Flutter plugin + force Kotlin plugin version ----
-      - |
-        cat > android/settings.gradle <<'EOF'
-        pluginManagement {
-          def flutterSdkPath = System.getenv("FLUTTER_ROOT")
-          if (flutterSdkPath == null && file("local.properties").exists()) {
-            def props = new Properties()
-            file("local.properties").withInputStream { props.load(it) }
-            flutterSdkPath = props.getProperty("flutter.sdk")
-          }
-          if (flutterSdkPath == null) {
-            throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
-          }
-          includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-          // Force Kotlin Gradle Plugin for ALL modules/plugins that request it
-          resolutionStrategy {
-            eachPlugin {
-              if (requested.id.id.startsWith("org.jetbrains.kotlin")) {
-                useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
-              }
-            }
-          }
-
-          repositories { google(); mavenCentral(); gradlePluginPortal() }
-        }
-
-        plugins {
-          id "dev.flutter.flutter-plugin-loader"
-        }
-
-        dependencyResolutionManagement {
-          repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-          repositories { google(); mavenCentral() }
-        }
-
-        include(":app")
-        EOF
-
-      # ---- Root build.gradle: AGP only + put Kotlin 1.9.24 on classpath ----
-      - |
-        cat > android/build.gradle <<'EOF'
-        plugins {
-          id "com.android.application" version "8.6.1" apply false
-          id "dev.flutter.flutter-plugin-loader" apply false
-        }
-        buildscript {
-          repositories { google(); mavenCentral() }
-          dependencies { classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24" }
-        }
-        EOF
-
-      # ---- Build (this is what worked for you) ----
-      - flutter build apk --debug --no-shrink -v
-
-      # ---- Collect APKs into a fixed folder so Codemagic always finds them ----
-      - |
-        echo "==== Searching for APKs ===="
-        find build -type f -name "*.apk" -print || true
-        find android -type f -name "*.apk" -print || true
-
-        echo "==== Copying to artifacts/ ===="
-        mkdir -p artifacts
-        # Flutter output
-        if [ -d build/app/outputs/flutter-apk ]; then
-          cp -v build/app/outputs/flutter-apk/*.apk artifacts/ 2>/dev/null || true
-        fi
-        # Gradle output (some environments write here)
-        if [ -d android/app/build/outputs/apk ]; then
-          find android/app/build/outputs/apk -type f -name "*.apk" -exec cp -v {} artifacts/ \; 2>/dev/null || true
-        fi
-
-        echo "==== Final artifact list ===="
-        ls -lah artifacts || true
-
-    artifacts:
-      - artifacts/*.apk
-      # (Fallbacks, just in case)
-      - build/**/outputs/**/*.apk
-      - android/**/build/outputs/**/*.apk
+      - cd android
+      - ./gradlew --no-daemon clean
+      - ./gradlew --no-daemon assembleDebug --stacktrace --info
+    publishing:
+      artifacts:
+        - android/app/build/outputs/**/*.apk
+        - android/app/build/reports/**/*
