@@ -1,22 +1,36 @@
+// android/settings.gradle — modern Flutter setup (no flutter_settings.gradle)
 pluginManagement {
+    // Find Flutter SDK path from env or local.properties
+    def flutterSdkPath = System.getenv("FLUTTER_ROOT")
+    if (flutterSdkPath == null || flutterSdkPath.isEmpty()) {
+        def props = new Properties()
+        file("local.properties").withInputStream { props.load(it) }
+        flutterSdkPath = props.getProperty("flutter.sdk")
+        assert flutterSdkPath != null : "flutter.sdk not set in local.properties and FLUTTER_ROOT is not defined."
+    }
+
+    // Include Flutter's Gradle build logic
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        // If you use jitpack or other repos, add here.
-        // maven { url 'https://jitpack.io' }
     }
 }
+
+plugins {
+    // This replaces the old `evaluate('flutter_settings.gradle')` loader
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+}
+
 rootProject.name = "pizza-ordering"
 include(":app")
-
-// Flutter’s local build (keep these two lines if your template has them)
-setBinding(new Binding([gradle: this]))
-evaluate(new File(settingsDir, "flutter_settings.gradle"))
