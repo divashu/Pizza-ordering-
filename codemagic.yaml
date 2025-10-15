@@ -28,7 +28,7 @@ workflows:
           chmod +x android/gradlew || true
 
         - name: Ensure local.properties has Flutter & Android SDK paths
-    script: |
+      script: |
       # Write absolute paths, not literals. No quotes after EOF so env vars expand.
       cat > android/local.properties <<EOF
       sdk.dir=$ANDROID_SDK_ROOT
