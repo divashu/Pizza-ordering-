@@ -24,15 +24,17 @@ workflows:
           chmod +x android/gradlew || true
 
       - name: Ensure local.properties has Flutter & Android SDK paths
-        script: |
-          [ -z "$ANDROID_SDK_ROOT" ] && { echo "ANDROID_SDK_ROOT is empty"; exit 1; }
-          [ -z "$FLUTTER_ROOT" ] && { echo "FLUTTER_ROOT is empty"; exit 1; }
-          cat > android/local.properties <<EOF
-sdk.dir=$ANDROID_SDK_ROOT
-flutter.sdk=$FLUTTER_ROOT
-EOF
-          echo "---- android/local.properties ----"
-          cat android/local.properties
+  script: |
+    # Fail if env vars are missing (POSIX-safe)
+    : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is empty}"
+    : "${FLUTTER_ROOT:?FLUTTER_ROOT is empty}"
+
+    # Write the file (no heredoc, no indentation issues)
+    printf "sdk.dir=%s\nflutter.sdk=%s\n" "$ANDROID_SDK_ROOT" "$FLUTTER_ROOT" > android/local.properties
+
+    echo "---- android/local.properties ----"
+    cat android/local.properties
+
 
       - name: Build with Gradle
         script: |
