@@ -27,14 +27,17 @@ workflows:
           # Make sure the Gradle wrapper is executable
           chmod +x android/gradlew || true
 
-      - name: Ensure local.properties has Flutter & Android SDK paths
-        script: |
-          cat > android/local.properties <<'EOF'
-          sdk.dir=${ANDROID_SDK_ROOT}
-          flutter.sdk=${FLUTTER_ROOT}
-          EOF
-          echo "---- android/local.properties ----"
-          cat android/local.properties
+        - name: Ensure local.properties has Flutter & Android SDK paths
+    script: |
+      # Write absolute paths, not literals. No quotes after EOF so env vars expand.
+      cat > android/local.properties <<EOF
+      sdk.dir=$ANDROID_SDK_ROOT
+      flutter.sdk=$FLUTTER_ROOT
+      EOF
+
+      echo "---- android/local.properties ----"
+      cat android/local.properties
+
 
       - name: Show Android dir (debug)
         script: |
