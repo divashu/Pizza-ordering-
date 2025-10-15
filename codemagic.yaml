@@ -1,6 +1,6 @@
 workflows:
   android-debug-java:
-    name: Android Debug (force KGP 1.9.24)
+    name: Android Debug (no Kotlin, new Gradle DSL)
     max_build_duration: 40
     environment:
       flutter: 3.35.6
@@ -9,35 +9,16 @@ workflows:
       cache_paths:
         - $FLUTTER_ROOT/.pub-cache
         - ~/.gradle/caches
-
     scripts:
       - echo "Versions:" && flutter --version && java -version
 
-      # Regenerate the Android host in **JAVA** (no kotlin sources)
+      # Regenerate Android host in Java (no Kotlin plugin)
       - flutter create . --platforms=android -a java --org com.example --overwrite
+
       - flutter pub get
       - yes | sdkmanager --licenses || true
 
-      # ---- Gradle wrapper (AGP 8.6 needs Gradle 8.9+) ----
-      - |
-        mkdir -p android/gradle/wrapper
-        cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.10.2-all.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
-        EOF
-
-      # ---- gradle.properties (common flags) ----
-      - |
-        cat > android/gradle.properties <<'EOF'
-        org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
-        android.useAndroidX=true
-        android.enableJetifier=true
-        EOF
-
-      # ---- settings.gradle: load Flutter plugin + force Kotlin plugin version ----
+      # ---- settings.gradle (plugin DSL + includeBuild for Flutter tools)
       - |
         cat > android/settings.gradle <<'EOF'
         pluginManagement {
@@ -51,50 +32,79 @@ workflows:
             throw new GradleException("Flutter SDK not found. Set FLUTTER_ROOT or flutter.sdk in local.properties")
           }
           includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-          // Force Kotlin Gradle Plugin for ALL modules/plugins that request it
-          resolutionStrategy {
-            eachPlugin {
-              if (requested.id.id.startsWith("org.jetbrains.kotlin")) {
-                useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
-              }
-            }
-          }
-
           repositories { google(); mavenCentral(); gradlePluginPortal() }
         }
-
-        plugins {
-          id "dev.flutter.flutter-plugin-loader"
-        }
-
-        // Ensure repos for all included builds
-        dependencyResolutionManagement {
-          repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-          repositories { google(); mavenCentral() }
-        }
-
+        plugins { id "dev.flutter.flutter-plugin-loader" }
         include(":app")
         EOF
 
-      # ---- Root build.gradle: AGP only + put Kotlin 1.9.24 on classpath (belt & suspenders) ----
+      # ---- Root android/build.gradle (AGP only)
       - |
         cat > android/build.gradle <<'EOF'
         plugins {
           id "com.android.application" version "8.6.1" apply false
           id "dev.flutter.flutter-plugin-loader" apply false
         }
-
-        // Also place KGP 1.9.24 on the build classpath so any plugin that
-        // relies on "already on classpath" picks the modern version.
-        buildscript {
-          repositories { google(); mavenCentral() }
-          dependencies { classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24" }
-        }
         EOF
 
-      # ---- Module build.gradle (no kotlin plugin here) ----
+      # ---- Module android/app/build.gradle (no Kotlin plugin)
       - |
         cat > android/app/build.gradle <<'EOF'
         plugins {
-          id
+          id "com.android.application"
+          id "dev.flutter.flutter-gradle-plugin"
+        }
+
+        android {
+          namespace "com.example.pizza_ordering"
+          compileSdk 34
+
+          defaultConfig {
+            applicationId "com.example.pizza_ordering"
+            minSdk 21
+            targetSdk 34
+            versionCode 1
+            versionName "1.0"
+            multiDexEnabled true
+          }
+
+          buildTypes {
+            release {
+              minifyEnabled false
+              signingConfig signingConfigs.debug
+            }
+          }
+
+          compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+          }
+        }
+
+        flutter { source '../..' }
+        EOF
+
+      # ---- Build (Flutter will print the exact output path at the end)
+      - flutter build apk --debug -v
+
+      # ---- Show and collect whatever got produced (APK/AAB) into artifacts/
+      - |
+        echo "==== Searching for APK/AABs ===="
+        find build -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
+        find android -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
+
+        echo "==== Copying to artifacts/ ===="
+        mkdir -p artifacts
+        # Copy from both common Flutter & Gradle locations
+        find build android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp -v {} artifacts/ \; || true
+
+        echo "==== Final artifact list ===="
+        ls -lah artifacts || true
+
+    artifacts:
+      # Always publish whatever we gathered
+      - artifacts/*.apk
+      - artifacts/*.aab
+      # (Optional) Also try the usual paths directly
+      - build/**/outputs/**/*.apk
+      - android/**/build/outputs/**/*.apk
